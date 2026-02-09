@@ -25,7 +25,7 @@ fi
 echo "🚀 開始執行 104 爬蟲..."
 echo ""
 
-node scripts/search_104.js "$@"
+node scripts/main.js "$@"
 
 echo ""
 echo "✅ 完成！檔案已儲存在 data/ 目錄"

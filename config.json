@@ -5,6 +5,12 @@
     "maxResults": 20,
     "requestDelay": 2000
   },
+  "companyEnricher": {
+    "enabled": true,
+    "provider": "brave",
+    "batchDelay": 1000,
+    "maxConcurrent": 3
+  },
   "googleSheets": {
     "enabled": false,
     "sheetId": "",
