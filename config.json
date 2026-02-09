@@ -1,0 +1,22 @@
+{
+  "scraper": {
+    "headless": true,
+    "slowMo": 1000,
+    "maxResults": 20,
+    "requestDelay": 2000
+  },
+  "googleSheets": {
+    "enabled": false,
+    "sheetId": "",
+    "sheetName": "Sheet1"
+  },
+  "deduplication": {
+    "enabled": true,
+    "cacheFile": "data/cache/seen_jobs.json"
+  },
+  "defaultSearch": {
+    "keywords": ["AI 工程師", "產品經理", "數位行銷"],
+    "locations": ["台北", "新竹", "遠端"],
+    "minSalary": 50000
+  }
+}

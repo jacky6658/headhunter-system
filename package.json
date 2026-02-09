@@ -1,0 +1,15 @@
+{
+  "name": "headhunter-scraper",
+  "version": "1.0.0",
+  "description": "獵頭自動化爬蟲系統",
+  "main": "scripts/search_104.js",
+  "scripts": {
+    "search": "node scripts/search_104.js",
+    "test": "node scripts/search_104.js 'AI 工程師' '台北' 60000"
+  },
+  "dependencies": {
+    "playwright": "^1.40.0"
+  },
+  "author": "Jacky Chen",
+  "license": "MIT"
+}
