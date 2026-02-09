@@ -183,6 +183,50 @@ cd /Users/user/clawd/projects/headhunter && ./run.sh "關鍵字" "地點" 最低
 - Google Sheet 連結
 - 前 3 筆預覽
 
+## 🔍 公司反查功能
+
+輸入公司名稱，查詢聯絡方式：
+
+```bash
+node scripts/company_lookup.js "精誠資訊"
+node scripts/company_lookup.js "台積電" "聯發科" "鴻海"
+```
+
+**AI 對話範例**：
+```
+查詢 精誠資訊 的聯絡方式
+幫我找 台積電 的電話和信箱
+```
+
+## 🕐 定時自動執行
+
+支援設定多組搜尋條件，定時自動執行：
+
+```bash
+# 初始化設定檔
+node scripts/scheduled_search.js --init
+
+# 列出所有搜尋設定
+node scripts/scheduled_search.js --list
+
+# 執行所有啟用的搜尋
+node scripts/scheduled_search.js
+
+# 執行指定設定
+node scripts/scheduled_search.js --run "AI工程師_台北"
+```
+
+**設定檔位置**：`config/scheduled_searches.json`
+
+**Cron 範例**：
+```bash
+# 每天早上 9 點執行
+0 9 * * * cd /path/to/headhunter && node scripts/scheduled_search.js
+
+# 每週一早上 9 點執行
+0 9 * * 1 cd /path/to/headhunter && node scripts/scheduled_search.js
+```
+
 ## 📝 License
 
 MIT

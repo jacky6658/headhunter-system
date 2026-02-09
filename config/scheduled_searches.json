@@ -1,0 +1,36 @@
+{
+  "searches": [
+    {
+      "name": "AI工程師_台北",
+      "enabled": true,
+      "keyword": "AI 工程師",
+      "location": "台北",
+      "minSalary": 60000,
+      "maxResults": 20,
+      "description": "台北 AI 工程師職缺"
+    },
+    {
+      "name": "產品經理_台北",
+      "enabled": true,
+      "keyword": "產品經理",
+      "location": "台北",
+      "minSalary": 50000,
+      "maxResults": 20,
+      "description": "台北產品經理職缺"
+    },
+    {
+      "name": "行銷企劃_台北",
+      "enabled": false,
+      "keyword": "行銷企劃",
+      "location": "台北",
+      "minSalary": 40000,
+      "maxResults": 15,
+      "description": "台北行銷企劃職缺（已停用）"
+    }
+  ],
+  "settings": {
+    "delayBetweenSearches": 60000,
+    "notifyOnComplete": true,
+    "logToFile": true
+  }
+}

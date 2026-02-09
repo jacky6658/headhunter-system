@@ -70,21 +70,31 @@ async function extractContactInfo(page) {
     const bodyText = document.body.textContent;
     
     // 台灣電話格式：
-    // 1. 手機：09xx-xxxxxx 或 09xxxxxxxx
+    // 1. 手機：09xx-xxx-xxx 或 09xxxxxxxx (10碼)
     // 2. 市話：(02)xxxx-xxxx, 02-xxxx-xxxx, +886-2-xxxx-xxxx
     // 3. 客服：0800-xxx-xxx
     const phonePatterns = [
-      /\+886[-\s]?[0-9][-\s]?[0-9]{3,4}[-\s]?[0-9]{4}/,  // +886-2-xxxx-xxxx
-      /0[0-9]{1,2}[-\s]?[0-9]{3,4}[-\s]?[0-9]{4}/,      // 02-xxxx-xxxx, 09xx-xxxxxx
-      /\([0-9]{2,3}\)[-\s]?[0-9]{3,4}[-\s]?[0-9]{4}/,   // (02)xxxx-xxxx
-      /0800[-\s]?[0-9]{3}[-\s]?[0-9]{3}/                // 0800-xxx-xxx
+      /\+886[-\s]?[29][-\s]?[0-9]{4}[-\s]?[0-9]{4}/,           // +886-2-xxxx-xxxx
+      /\(0[2-9]\)[-\s]?[0-9]{4}[-\s]?[0-9]{4}/,                // (02)xxxx-xxxx
+      /0[2-9][-\s]?[0-9]{4}[-\s]?[0-9]{4}/,                    // 02-xxxx-xxxx (市話 9碼)
+      /09[0-9]{2}[-\s]?[0-9]{3}[-\s]?[0-9]{3}/,                // 09xx-xxx-xxx (手機 10碼)
+      /0800[-\s]?[0-9]{3}[-\s]?[0-9]{3}/                       // 0800-xxx-xxx
     ];
     
     for (const pattern of phonePatterns) {
       const match = bodyText.match(pattern);
       if (match) {
-        phone = match[0].replace(/\s+/g, ' ').trim();
-        break;
+        let phoneNum = match[0].replace(/\s+/g, '').replace(/-/g, '');
+        // 驗證電話長度（排除異常號碼）
+        const digitsOnly = phoneNum.replace(/\D/g, '');
+        // 市話 9-10 碼，手機 10 碼，0800 10 碼，+886 開頭 12 碼
+        if (digitsOnly.length >= 9 && digitsOnly.length <= 12) {
+          // 排除全 0 或重複數字的假號碼
+          if (!/^0{5,}/.test(digitsOnly) && !/(\d)\1{6,}/.test(digitsOnly)) {
+            phone = match[0].replace(/\s+/g, ' ').trim();
+            break;
+          }
+        }
       }
     }
 
