@@ -227,6 +227,58 @@ node scripts/scheduled_search.js --run "AI工程師_台北"
 0 9 * * 1 cd /path/to/headhunter && node scripts/scheduled_search.js
 ```
 
+## 📧 批次郵件發送
+
+支援讀取 Google Sheet → 生成個性化郵件 → 批次發送
+
+### AI 對話流程（重要！）
+
+當用戶說「發信」時，AI **必須依序確認**：
+
+**Step 1: 確認發送者**
+```
+請問你是誰？
+- 姓名：
+- 職稱：
+- Email：
+- 電話：
+```
+
+**Step 2: 確認發送對象**
+```
+發送給哪些公司？
+- Sheet 網址或 ID：
+- 分頁名稱：
+- 用哪個模板？（開發信/年節問候/自訂）
+```
+
+**Step 3: 預覽確認（必要！）**
+```
+📧 信件預覽：
+主旨：xxxxxx
+內文：xxxxxx
+
+確認要發送嗎？(Y/N)
+```
+
+⚠️ **用戶確認 OK 後才能執行發送，不可跳過預覽！**
+
+### 信件模板
+
+位置：`config/templates/`
+- `開發信_人才招募.json` - 開發客戶用
+- `年節問候.json` - 節日祝福用
+
+### 命令列用法
+
+```bash
+# 預覽（不發送）
+node scripts/email_sender.js --sheet <ID> --tab "分頁" --preview
+
+# 實際發送（需先預覽確認）
+node scripts/email_sender.js --sheet <ID> --tab "分頁" --send
+```
+
 ## 📝 License
 
 MIT
