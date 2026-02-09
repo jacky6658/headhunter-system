@@ -1,101 +1,188 @@
-# 獵頭自動化爬蟲系統
+# 🦞 獵頭自動化爬蟲系統 v2.0
 
-自動爬取 104、CakeResume 等平台的職缺和求職者資料。
+自動爬取 104 + CakeResume 職缺，補充聯絡資訊，並同步到 Google Sheet。
 
-## 功能
+## ✨ 功能
 
-- ✅ 104 人力銀行職缺搜尋
-- ✅ Brave Search API 公司資訊補充
-- ✅ CSV 匯出（含公司簡介和資料來源）
-- ⏳ CakeResume 爬蟲（開發中）
-- ⏳ Google Sheets 自動上傳（開發中）
+- ✅ **104 人力銀行**爬蟲（職缺 + 聯絡人）
+- ✅ **CakeResume / Cake.me** 爬蟲
+- ✅ **官網聯絡資訊補充**（電話、信箱）
+- ✅ **Google Sheet 自動匯出**（分頁：104 / cakeresume）
+- ✅ CSV 備份匯出
 
-## 安裝
+## 🚀 使用方式
+
+### 方式一：跟 AI Bot 說（推薦）
+
+直接用自然語言告訴 AI：
+
+```
+幫我搜尋 AI 工程師 台北 薪水 5 萬以上
+```
+
+```
+找 20 筆行銷企劃的職缺 地點台北 月薪 4 萬起
+```
+
+```
+搜尋短影音行銷 台北 40000 10筆
+```
+
+**AI 會自動**：
+1. 解析你的需求
+2. 執行爬蟲（104 + CakeResume）
+3. 補充聯絡資訊
+4. 匯出到 Google Sheet
+5. 回報結果
+
+### 方式二：命令列執行
+
+```bash
+cd /Users/user/clawd/projects/headhunter
+
+# 使用 run.sh
+./run.sh "關鍵字" "地點" [最低薪資] [最大筆數]
+
+# 範例
+./run.sh "AI 工程師" "台北" 50000 20
+./run.sh "行銷企劃" "新竹" 40000 10
+./run.sh "PM" "" 60000      # 不限地點
+```
+
+### 方式三：Node.js 直接執行
+
+```bash
+node scripts/main.js "AI 工程師" "台北" 50000 20
+```
+
+## 📊 輸出
+
+### Google Sheet（自動同步）
+- **104 分頁**：104 人力銀行職缺
+- **cakeresume 分頁**：CakeResume 職缺
+
+### CSV 檔案（備份）
+位置：`data/104_<關鍵字>_<日期>.csv`、`data/cakeresume_<關鍵字>_<日期>.csv`
+
+### 欄位
+| 欄位 | 說明 |
+|------|------|
+| 公司名稱 | 公司名稱 |
+| 職缺標題 | 職缺名稱 |
+| 薪資範圍 | 月薪/年薪/時薪 |
+| 地點 | 工作地點 |
+| 經驗要求 | 年資要求 |
+| 工作內容 | 職缺描述（前 300 字）|
+| 聯絡人 | HR / 負責人 |
+| 聯絡電話 | 公司電話 |
+| 聯絡信箱 | 公司信箱 |
+| 連結 | 職缺網址 |
+| 更新日期 | 最後更新 |
+
+## ⚙️ 設定
+
+### config.json
+
+```json
+{
+  "scraper": {
+    "maxResults": 20,
+    "requestDelay": 2000
+  },
+  "companyEnricher": {
+    "enabled": true,
+    "batchDelay": 2000
+  },
+  "googleSheets": {
+    "enabled": true,
+    "sheetId": "你的 Google Sheet ID",
+    "account": "your@gmail.com"
+  }
+}
+```
+
+### 環境變數
+
+- `BRAVE_API_KEY` - Brave Search API 金鑰（官網爬蟲用）
+
+## 🛠️ 安裝
 
 ```bash
 cd /Users/user/clawd/projects/headhunter
 npm install
+
+# 安裝 Playwright 瀏覽器
+npx playwright install chromium
 ```
 
-## 使用方式
+### Google Sheet 設定
 
-### 1. 快速執行（推薦）
+1. 確保 `gog` CLI 已授權：
+   ```bash
+   gog auth add your@gmail.com --services drive,sheets
+   ```
 
-```bash
-# 使用 run.sh 腳本（自動整合 Brave Search）
-./run.sh "AI 工程師"                    # 基本搜尋
-./run.sh "產品經理" "台北"              # 指定地點
-./run.sh "數位行銷" "台北" 60000        # 指定最低薪資
+2. 創建 Google Sheet，取得 Sheet ID
+
+3. 在 Sheet 中創建兩個分頁：`104` 和 `cakeresume`
+
+4. 更新 `config.json` 中的 `googleSheets.sheetId`
+
+## 📁 專案結構
+
+```
+headhunter/
+├── scripts/
+│   ├── main.js              # 主程式（整合所有功能）
+│   ├── search_104.js        # 104 爬蟲
+│   ├── search_cakeresume.js # CakeResume 爬蟲
+│   ├── company_enricher.js  # 官網聯絡資訊補充
+│   └── sheet_exporter.js    # Google Sheet 匯出
+├── data/                    # CSV 輸出目錄
+├── config.json              # 設定檔
+├── run.sh                   # 快速啟動腳本
+└── README.md
 ```
 
-### 2. 命令列執行
+## 🔒 安全機制
 
-```bash
-# 完整流程（104 + Brave Search + CSV）
-node scripts/main.js "AI 工程師" "台北" 60000
-
-# 只執行 104 爬蟲（不補充公司資訊）
-node scripts/search_104.js "AI 工程師" "台北" 60000
-```
-
-### 3. npm script
-
-```bash
-# 測試腳本（AI 工程師 | 台北 | 60K+）
-npm run test
-```
-
-### 4. OpenClaw 對話觸發（開發中）
-
-直接對 YuQi 說：
-> 「幫我找台北的 AI 工程師職缺，薪資 60K 以上」
-
-## 輸出格式
-
-### CSV 檔案
-儲存位置：`/Users/user/clawd/projects/headhunter/data/`
-
-檔名格式：`104_enriched_<關鍵字>_<日期>.csv`
-
-欄位：
-- 公司名稱
-- 職缺標題
-- 薪資範圍
-- 地點
-- 經驗要求
-- 連結
-- 更新日期
-- **公司簡介**（Brave Search）
-- **資料來源1-3**（含標題和連結）
-
-## 安全機制
-
-- ✅ 真實瀏覽器（Playwright）
-- ✅ 請求間隔 1-2 秒
-- ✅ 每次最多 20 筆
+- ✅ 真實瀏覽器（Playwright Chromium）
+- ✅ 請求間隔 1-2 秒，避免被封鎖
+- ✅ 每次最多 20 筆，防止過度爬取
 - ✅ 模擬真人操作
 
-## 開發計畫
+## 📈 聯絡資訊成功率
 
-- [x] 104 爬蟲
-- [x] Brave Search API 整合
-- [x] 公司資訊補充
-- [ ] 104 爬蟲實測
-- [ ] CakeResume 爬蟲
-- [ ] Google Sheets 自動上傳
-- [ ] 去重機制
-- [ ] OpenClaw skill 包裝
+| 項目 | 104 | CakeResume |
+|------|-----|------------|
+| 聯絡人 | ~100% | N/A |
+| 電話 | ~80% | N/A |
+| 信箱 | ~50% | N/A |
 
-## 環境變數
+（CakeResume 不提供聯絡資訊）
 
-系統會自動從 OpenClaw 環境讀取：
-- `BRAVE_API_KEY` 或 `BRAVE_SEARCH_API_KEY` - Brave Search API 金鑰
+## 🤖 給其他 AI Bot 的說明
 
-如需停用公司資訊補充，修改 `config.json`：
-```json
-{
-  "companyEnricher": {
-    "enabled": false
-  }
-}
+當用戶說類似以下的話時，執行獵頭爬蟲：
+
+**觸發關鍵字**：搜尋職缺、找工作、獵頭、爬蟲、104、CakeResume
+
+**解析用戶輸入**：
+- 關鍵字：職位名稱（AI 工程師、行銷企劃、PM...）
+- 地點：城市名（台北、新竹、高雄...）
+- 薪資：數字（40000、5萬、60K...）
+- 筆數：數字（10、20、30...）
+
+**執行指令**：
+```bash
+cd /Users/user/clawd/projects/headhunter && ./run.sh "關鍵字" "地點" 最低薪資 筆數
 ```
+
+**回報結果**：
+- 找到幾筆職缺
+- Google Sheet 連結
+- 前 3 筆預覽
+
+## 📝 License
+
+MIT
