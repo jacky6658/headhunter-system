@@ -6,8 +6,11 @@
 
 const { search104 } = require('./search_104');
 const { searchCake: searchCakeResume } = require('./search_cakeresume');
+const { search1111 } = require('./search_1111');
+const { search518 } = require('./search_518');
 const { enrichCompanies } = require('./company_enricher');
 const { exportToSheet, loadConfig: loadSheetConfig } = require('./sheet_exporter');
+const { filterDuplicates, getStats } = require('./dedup');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
@@ -131,54 +134,103 @@ async function main() {
   console.log('='.repeat(50));
 
   const timestamp = new Date().toISOString().split('T')[0];
-  const results = { '104': [], 'cakeresume': [] };
+  const platforms = config.platforms || { '104': true, 'cakeresume': true };
+  const results = {};
+  
+  // 平台搜尋函數映射
+  const searchFunctions = {
+    '104': search104,
+    'cakeresume': searchCakeResume,
+    '1111': search1111,
+    '518': search518
+  };
 
-  // ========== Step 1: 搜尋 104 ==========
-  console.log('\n📋 Step 1/4: 搜尋 104 人力銀行');
-  try {
-    const jobs104 = await search104({ keyword, location, minSalary, maxResults });
-    results['104'] = jobs104;
-    console.log(`   找到 ${jobs104.length} 筆職缺`);
-  } catch (err) {
-    console.error(`   ❌ 104 搜尋失敗: ${err.message}`);
+  // 計算啟用的平台數量
+  const enabledPlatforms = Object.entries(platforms).filter(([_, enabled]) => enabled).map(([name]) => name);
+  let stepNum = 0;
+  const totalSteps = enabledPlatforms.length + 2; // 平台數 + 去重 + 聯絡資訊 + 匯出
+
+  // ========== 搜尋各平台 ==========
+  for (const platform of enabledPlatforms) {
+    stepNum++;
+    console.log(`\n📋 Step ${stepNum}/${totalSteps}: 搜尋 ${platform}`);
+    results[platform] = [];
+    
+    const searchFn = searchFunctions[platform];
+    if (!searchFn) {
+      console.log(`   ⚠️  平台 ${platform} 不支援`);
+      continue;
+    }
+    
+    try {
+      const jobs = await searchFn({ keyword, location, minSalary, maxResults });
+      results[platform] = jobs;
+      console.log(`   找到 ${jobs.length} 筆職缺`);
+    } catch (err) {
+      console.error(`   ❌ ${platform} 搜尋失敗: ${err.message}`);
+    }
   }
 
-  // ========== Step 2: 搜尋 CakeResume ==========
-  console.log('\n📋 Step 2/4: 搜尋 CakeResume');
-  try {
-    const jobsCake = await searchCakeResume({ keyword, location, minSalary, maxResults });
-    results['cakeresume'] = jobsCake;
-    console.log(`   找到 ${jobsCake.length} 筆職缺`);
-  } catch (err) {
-    console.error(`   ❌ CakeResume 搜尋失敗: ${err.message}`);
+  // 去重處理
+  stepNum++;
+  console.log(`\n📋 Step ${stepNum}/${totalSteps}: 職缺去重`);
+  let totalBefore = results['104'].length + results['cakeresume'].length;
+  let totalDuplicates = 0;
+  
+  if (config.deduplication?.enabled !== false) {
+    for (const platform of enabledPlatforms) {
+      if (results[platform].length > 0) {
+        // 標記平台來源
+        results[platform] = results[platform].map(j => ({ ...j, platform }));
+        const { unique, duplicates } = filterDuplicates(results[platform]);
+        totalDuplicates += duplicates.length;
+        results[platform] = unique;
+        if (duplicates.length > 0) {
+          console.log(`   ${platform}: 過濾 ${duplicates.length} 筆重複`);
+        }
+      }
+    }
+    if (totalDuplicates > 0) {
+      console.log(`   ✅ 共過濾 ${totalDuplicates} 筆重複職缺`);
+    } else {
+      console.log(`   ✅ 無重複職缺`);
+    }
+  } else {
+    console.log('   ⏭️  去重功能已停用');
   }
 
   // 合計
-  const totalJobs = results['104'].length + results['cakeresume'].length;
+  const totalJobs = Object.values(results).reduce((sum, jobs) => sum + jobs.length, 0);
   if (totalJobs === 0) {
-    console.log('\n❌ 沒有找到任何職缺');
+    console.log('\n❌ 沒有找到任何職缺（全部重複或無結果）');
     return;
   }
 
-  // ========== Step 3: 補充聯絡資訊（僅 104）==========
-  console.log('\n📋 Step 3/4: 補充聯絡資訊（官網）');
-  if (config.companyEnricher?.enabled && results['104'].length > 0) {
-    const needEnrich = results['104'].filter(j => !j.contactPhone || !j.contactEmail);
-    if (needEnrich.length > 0) {
-      console.log(`   需補充: ${needEnrich.length} 筆`);
-      results['104'] = await enrichCompanies(results['104'], {
-        enabled: true,
-        batchDelay: config.companyEnricher.batchDelay || 2000
-      });
-    } else {
-      console.log('   ✅ 所有職缺已有完整聯絡資訊');
+  // ========== 補充聯絡資訊 ==========
+  stepNum++;
+  console.log(`\n📋 Step ${stepNum}/${totalSteps}: 補充聯絡資訊（官網）`);
+  
+  // 對所有平台的職缺補充聯絡資訊
+  if (config.companyEnricher?.enabled) {
+    for (const platform of enabledPlatforms) {
+      if (results[platform]?.length > 0) {
+        const needEnrich = results[platform].filter(j => !j.contactPhone || !j.contactEmail);
+        if (needEnrich.length > 0) {
+          console.log(`   ${platform}: 需補充 ${needEnrich.length} 筆`);
+          results[platform] = await enrichCompanies(results[platform], {
+            enabled: true,
+            batchDelay: config.companyEnricher.batchDelay || 2000
+          });
+        }
+      }
     }
   } else {
-    console.log('   ⏭️  跳過（未啟用或無 104 資料）');
+    console.log('   ⏭️  聯絡資訊補充功能已停用');
   }
 
-  // ========== Step 4: 匯出結果 ==========
-  console.log('\n📋 Step 4/4: 匯出結果');
+  // ========== 匯出結果 ==========
+  stepNum++;
+  console.log(`\n📋 Step ${stepNum}/${totalSteps}: 匯出結果`);
   
   // 匯出 CSV
   const csvFiles = {};
@@ -207,21 +259,28 @@ async function main() {
   console.log('='.repeat(50));
   
   console.log('\n📊 結果摘要:');
-  console.log(`   104: ${results['104'].length} 筆`);
-  console.log(`   CakeResume: ${results['cakeresume'].length} 筆`);
+  for (const platform of enabledPlatforms) {
+    console.log(`   ${platform}: ${results[platform]?.length || 0} 筆`);
+  }
   console.log(`   總計: ${totalJobs} 筆`);
 
   // 顯示聯絡資訊統計
-  if (results['104'].length > 0) showStats(results['104'], '104');
-  if (results['cakeresume'].length > 0) showStats(results['cakeresume'], 'CakeResume');
+  for (const platform of enabledPlatforms) {
+    if (results[platform]?.length > 0) {
+      showStats(results[platform], platform);
+    }
+  }
 
-  // 預覽
-  console.log('\n🔝 前 3 筆預覽 (104):');
-  results['104'].slice(0, 3).forEach((job, i) => {
-    console.log(`\n${i + 1}. ${job.company} - ${job.title}`);
-    console.log(`   💰 ${job.salary} | 📍 ${job.location}`);
-    console.log(`   👤 ${job.contactPerson || '(無)'} | 📞 ${job.contactPhone || '(無)'} | 📧 ${job.contactEmail || '(無)'}`);
-  });
+  // 預覽（顯示第一個有資料的平台）
+  const firstPlatformWithData = enabledPlatforms.find(p => results[p]?.length > 0);
+  if (firstPlatformWithData) {
+    console.log(`\n🔝 前 3 筆預覽 (${firstPlatformWithData}):`);
+    results[firstPlatformWithData].slice(0, 3).forEach((job, i) => {
+      console.log(`\n${i + 1}. ${job.company} - ${job.title}`);
+      console.log(`   💰 ${job.salary} | 📍 ${job.location}`);
+      console.log(`   👤 ${job.contactPerson || '(無)'} | 📞 ${job.contactPhone || '(無)'} | 📧 ${job.contactEmail || '(無)'}`);
+    });
+  }
 
   console.log('\n');
 }

@@ -11,18 +11,18 @@ const { chromium } = require('playwright');
 const BRAVE_API_KEY = process.env.BRAVE_API_KEY || process.env.BRAVE_SEARCH_API_KEY;
 
 /**
- * 使用 Brave Search 找公司官網
+ * 使用 Brave Search 找公司官網（返回多個結果）
  * @param {string} companyName - 公司名稱
- * @returns {Promise<string|null>} - 官網 URL
+ * @returns {Promise<string[]>} - 官網 URL 列表（最多 3 個）
  */
-async function findCompanyWebsite(companyName) {
+async function findCompanyWebsites(companyName) {
   if (!BRAVE_API_KEY) {
     console.warn('⚠️  未設定 BRAVE_API_KEY');
-    return null;
+    return [];
   }
 
-  const query = `${companyName} 官網`;
-  const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=3`;
+  const query = `${companyName} 官網 聯絡`;
+  const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
 
   return new Promise((resolve) => {
     const options = {
@@ -40,19 +40,31 @@ async function findCompanyWebsite(companyName) {
           const result = JSON.parse(data);
           
           if (result.message || !result.web?.results?.length) {
-            resolve(null);
+            resolve([]);
             return;
           }
           
-          // 取第一個結果的 URL
-          const websiteUrl = result.web.results[0].url;
-          resolve(websiteUrl);
+          // 過濾並返回前 3 個有效 URL（排除人力銀行等）
+          const urls = result.web.results
+            .map(r => r.url)
+            .filter(u => !/(104\.com|1111\.com|518\.com|cakeresume|linkedin|facebook)/i.test(u))
+            .slice(0, 3);
+          
+          resolve(urls);
         } catch (err) {
-          resolve(null);
+          resolve([]);
         }
       });
-    }).on('error', () => resolve(null));
+    }).on('error', () => resolve([]));
   });
+}
+
+/**
+ * 使用 Brave Search 找公司官網（相容舊版）
+ */
+async function findCompanyWebsite(companyName) {
+  const urls = await findCompanyWebsites(companyName);
+  return urls[0] || null;
 }
 
 /**
@@ -246,7 +258,7 @@ async function scrapeContactInfo(websiteUrl) {
 }
 
 /**
- * 補充單一公司的聯絡資訊
+ * 補充單一公司的聯絡資訊（嘗試多個網站）
  * @param {Object} job - 職缺資料
  * @returns {Promise<Object>} - 補充後的職缺資料
  */
@@ -254,35 +266,45 @@ async function enrichSingleCompany(job) {
   const { company, contactPerson, contactPhone, contactEmail } = job;
 
   // 如果已經有完整聯絡資訊，跳過
-  if (contactPerson && contactPhone && contactEmail) {
+  if (contactPhone && contactEmail) {
     console.log(`   ✅ ${company} (已有完整聯絡資訊)`);
     return job;
   }
 
   console.log(`   🔍 ${company} (補充聯絡資訊...)`);
 
-  // 1. 找官網
-  const websiteUrl = await findCompanyWebsite(company);
-  if (!websiteUrl) {
+  // 1. 找多個可能的官網
+  const websiteUrls = await findCompanyWebsites(company);
+  if (websiteUrls.length === 0) {
     console.log(`   ⚠️  ${company} (找不到官網)`);
     return job;
   }
 
-  console.log(`   🌐 找到官網: ${websiteUrl}`);
+  console.log(`   🌐 找到 ${websiteUrls.length} 個網站`);
 
-  // 2. 爬取聯絡資訊
-  const contactInfo = await scrapeContactInfo(websiteUrl);
-
-  // 3. 只補充缺失的欄位
+  // 2. 依序嘗試爬取聯絡資訊，直到找齊
   const enrichedJob = { ...job };
-  if (!enrichedJob.contactPerson && contactInfo.contactPerson) {
-    enrichedJob.contactPerson = contactInfo.contactPerson;
-  }
-  if (!enrichedJob.contactPhone && contactInfo.contactPhone) {
-    enrichedJob.contactPhone = contactInfo.contactPhone;
-  }
-  if (!enrichedJob.contactEmail && contactInfo.contactEmail) {
-    enrichedJob.contactEmail = contactInfo.contactEmail;
+  
+  for (const url of websiteUrls) {
+    // 如果已經有電話和信箱，停止
+    if (enrichedJob.contactPhone && enrichedJob.contactEmail) break;
+    
+    try {
+      const contactInfo = await scrapeContactInfo(url);
+      
+      // 只補充缺失的欄位
+      if (!enrichedJob.contactPerson && contactInfo.contactPerson) {
+        enrichedJob.contactPerson = contactInfo.contactPerson;
+      }
+      if (!enrichedJob.contactPhone && contactInfo.contactPhone) {
+        enrichedJob.contactPhone = contactInfo.contactPhone;
+      }
+      if (!enrichedJob.contactEmail && contactInfo.contactEmail) {
+        enrichedJob.contactEmail = contactInfo.contactEmail;
+      }
+    } catch (err) {
+      // 繼續嘗試下一個網站
+    }
   }
 
   console.log(`   ✅ ${company} (電話: ${enrichedJob.contactPhone || '無'} | 信箱: ${enrichedJob.contactEmail || '無'})`);

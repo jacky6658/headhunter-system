@@ -1,4 +1,10 @@
 {
+  "platforms": {
+    "104": true,
+    "cakeresume": true,
+    "1111": false,
+    "518": false
+  },
   "scraper": {
     "headless": true,
     "slowMo": 1000,
