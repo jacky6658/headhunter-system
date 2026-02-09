@@ -53,11 +53,11 @@ async function search104(params = {}) {
     
     // 2. 等待職缺列表出現
     console.log(`⏳ 等待職缺列表載入...`);
-    await page.waitForSelector('article[class*="job-list"]', { timeout: CONFIG.timeout });
+    await page.waitForSelector('.job-summary', { timeout: CONFIG.timeout });
     
     // 3. 抓取職缺卡片
     console.log(`📊 開始解析職缺...`);
-    const jobCards = await page.$$('article[class*="job-list"]');
+    const jobCards = await page.$$('.job-summary');
     
     console.log(`   找到 ${jobCards.length} 筆職缺`);
     
@@ -68,28 +68,33 @@ async function search104(params = {}) {
         // 解析職缺資訊
         const jobData = await card.evaluate((el) => {
           // 公司名稱
-          const companyEl = el.querySelector('a[data-job-name="company"]');
+          const companyEl = el.querySelector('.info-company__text');
           const company = companyEl ? companyEl.textContent.trim() : '';
           
           // 職缺標題
-          const titleEl = el.querySelector('a[class*="job-link"]');
+          const titleEl = el.querySelector('.info-job__text');
           const title = titleEl ? titleEl.textContent.trim() : '';
           const link = titleEl ? titleEl.href : '';
           
-          // 薪資
-          const salaryEl = el.querySelector('[class*="salary"]');
-          const salary = salaryEl ? salaryEl.textContent.trim() : '面議';
+          // 薪資、地點、經驗（都在 .info-tags 裡）
+          const tagsEls = el.querySelectorAll('.info-tags .info-tags__text');
+          let location = '';
+          let experience = '';
+          let salary = '面議';
           
-          // 地點
-          const locationEl = el.querySelector('[class*="location"]');
-          const location = locationEl ? locationEl.textContent.trim() : '';
-          
-          // 經驗要求
-          const expEl = el.querySelector('[class*="experience"]');
-          const experience = expEl ? expEl.textContent.trim() : '';
+          tagsEls.forEach(tag => {
+            const text = tag.textContent.trim();
+            if (text.includes('市') || text.includes('縣')) {
+              location = text;
+            } else if (text.includes('經歷')) {
+              experience = text;
+            } else if (text.includes('月薪') || text.includes('元')) {
+              salary = text;
+            }
+          });
           
           // 更新日期
-          const dateEl = el.querySelector('[class*="date"]');
+          const dateEl = el.querySelector('.date-container');
           const updateDate = dateEl ? dateEl.textContent.trim() : '';
           
           return { company, title, salary, location, experience, link, updateDate };
