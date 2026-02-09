@@ -56,6 +56,104 @@ async function findCompanyWebsite(companyName) {
 }
 
 /**
+ * 從頁面提取聯絡資訊（獨立函數）
+ * @param {Page} page - Playwright Page 物件
+ * @returns {Promise<Object>} - {person, phone, email}
+ */
+async function extractContactInfo(page) {
+  return await page.evaluate(() => {
+    let person = '';
+    let phone = '';
+    let email = '';
+
+    // === 電話提取（改善正則，支援更多格式）===
+    const bodyText = document.body.textContent;
+    
+    // 台灣電話格式：
+    // 1. 手機：09xx-xxxxxx 或 09xxxxxxxx
+    // 2. 市話：(02)xxxx-xxxx, 02-xxxx-xxxx, +886-2-xxxx-xxxx
+    // 3. 客服：0800-xxx-xxx
+    const phonePatterns = [
+      /\+886[-\s]?[0-9][-\s]?[0-9]{3,4}[-\s]?[0-9]{4}/,  // +886-2-xxxx-xxxx
+      /0[0-9]{1,2}[-\s]?[0-9]{3,4}[-\s]?[0-9]{4}/,      // 02-xxxx-xxxx, 09xx-xxxxxx
+      /\([0-9]{2,3}\)[-\s]?[0-9]{3,4}[-\s]?[0-9]{4}/,   // (02)xxxx-xxxx
+      /0800[-\s]?[0-9]{3}[-\s]?[0-9]{3}/                // 0800-xxx-xxx
+    ];
+    
+    for (const pattern of phonePatterns) {
+      const match = bodyText.match(pattern);
+      if (match) {
+        phone = match[0].replace(/\s+/g, ' ').trim();
+        break;
+      }
+    }
+
+    // 如果還沒找到，嘗試 footer
+    if (!phone) {
+      const footer = document.querySelector('footer') || document.querySelector('[class*="footer"]');
+      if (footer) {
+        const footerText = footer.textContent;
+        for (const pattern of phonePatterns) {
+          const match = footerText.match(pattern);
+          if (match) {
+            phone = match[0].replace(/\s+/g, ' ').trim();
+            break;
+          }
+        }
+      }
+    }
+
+    // === 信箱提取（改善過濾）===
+    // 優先找 mailto 連結
+    const emailLinks = Array.from(document.querySelectorAll('a[href^="mailto:"]'));
+    if (emailLinks.length > 0) {
+      // 過濾掉 noreply, no-reply, donotreply 等
+      const validEmail = emailLinks.find(a => {
+        const addr = a.href.replace('mailto:', '');
+        return !/noreply|no-reply|donotreply/i.test(addr);
+      });
+      if (validEmail) {
+        email = validEmail.href.replace('mailto:', '').split('?')[0]; // 移除查詢參數
+      }
+    }
+    
+    // 如果沒找到，用正則
+    if (!email) {
+      const emailMatches = bodyText.match(/[\w\.-]+@[\w\.-]+\.\w{2,}/g);
+      if (emailMatches) {
+        // 過濾並選擇最可能的
+        const validEmails = emailMatches.filter(e => 
+          !/noreply|no-reply|donotreply|example\.com|test\.com/i.test(e)
+        );
+        if (validEmails.length > 0) {
+          // 優先選擇包含 info, contact, hr, service 的信箱
+          email = validEmails.find(e => /info|contact|hr|service|招募|人才/i.test(e)) || validEmails[0];
+        }
+      }
+    }
+
+    // === 聯絡人提取（擴展選擇器）===
+    const personSelectors = [
+      '[class*="contact"] [class*="name"]',
+      '[class*="recruiter"]',
+      '[class*="hr"]',
+      '[class*="人資"]',
+      '[class*="聯絡人"]'
+    ];
+    
+    for (const selector of personSelectors) {
+      const el = document.querySelector(selector);
+      if (el) {
+        person = el.textContent.trim();
+        break;
+      }
+    }
+
+    return { person, phone, email };
+  });
+}
+
+/**
  * 爬取官網聯絡資訊
  * @param {string} websiteUrl - 官網 URL
  * @returns {Promise<Object>} - {contactPerson, contactPhone, contactEmail}
@@ -77,51 +175,56 @@ async function scrapeContactInfo(websiteUrl) {
     await page.goto(websiteUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.waitForTimeout(2000);
 
-    // 嘗試找聯絡頁面連結
+    // 嘗試找聯絡頁面連結（擴展關鍵字）
     const contactLinks = await page.$$eval('a', links => 
       links
-        .filter(a => /contact|聯絡|關於/i.test(a.textContent || a.href))
+        .filter(a => {
+          const text = (a.textContent || '').toLowerCase();
+          const href = (a.href || '').toLowerCase();
+          return /contact|聯絡|關於|about|公司介紹|公司簡介|聯繫|客服|服務|招募|人才|careers/i.test(text + href);
+        })
         .map(a => a.href)
+        .filter((href, index, self) => self.indexOf(href) === index) // 去重
     );
 
-    // 如果有聯絡頁面，進入該頁面
-    if (contactLinks.length > 0) {
-      const contactUrl = contactLinks[0];
-      await page.goto(contactUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
-      await page.waitForTimeout(2000);
-    }
-
-    // 提取聯絡資訊
-    const contactData = await page.evaluate(() => {
-      let person = '';
-      let phone = '';
-      let email = '';
-
-      // 聯絡人
-      const personEl = document.querySelector('[class*="contact"] [class*="name"]') ||
-                       document.querySelector('[class*="recruiter"]');
-      if (personEl) person = personEl.textContent.trim();
-
-      // 電話（正則匹配）
-      const bodyText = document.body.textContent;
-      const phoneMatch = bodyText.match(/(\+886|0)\d{1,2}[-\s]?\d{3,4}[-\s]?\d{4}/);
-      if (phoneMatch) phone = phoneMatch[0];
-
-      // 信箱
-      const emailEl = document.querySelector('a[href^="mailto:"]');
-      if (emailEl) {
-        email = emailEl.href.replace('mailto:', '');
-      } else {
-        const emailMatch = bodyText.match(/[\w\.-]+@[\w\.-]+\.\w+/);
-        if (emailMatch) email = emailMatch[0];
-      }
-
-      return { person, phone, email };
+    // 優先順序：contact > 聯絡 > about > 其他
+    const priorityLinks = contactLinks.sort((a, b) => {
+      const scoreA = /contact|聯絡/i.test(a) ? 3 : /about|關於/i.test(a) ? 2 : 1;
+      const scoreB = /contact|聯絡/i.test(b) ? 3 : /about|關於/i.test(b) ? 2 : 1;
+      return scoreB - scoreA;
     });
 
-    result.contactPerson = contactData.person;
-    result.contactPhone = contactData.phone;
-    result.contactEmail = contactData.email;
+    // 嘗試前 2 個聯絡頁面
+    const pagesToTry = [websiteUrl, ...priorityLinks.slice(0, 2)];
+    const allContactData = [];
+
+    for (const pageUrl of pagesToTry) {
+      try {
+        if (pageUrl !== websiteUrl) {
+          await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+          await page.waitForTimeout(1500);
+        }
+
+        const contactData = await extractContactInfo(page);
+        allContactData.push(contactData);
+        
+        // 如果已經找齊資料，提前結束
+        if (contactData.phone && contactData.email) break;
+      } catch (err) {
+        // 繼續嘗試下一個頁面
+      }
+    }
+
+    // 合併所有頁面的資料（優先使用最完整的）
+    const mergedData = allContactData.reduce((best, current) => ({
+      person: best.person || current.person,
+      phone: best.phone || current.phone,
+      email: best.email || current.email
+    }), { person: '', phone: '', email: '' });
+
+    result.contactPerson = mergedData.person;
+    result.contactPhone = mergedData.phone;
+    result.contactEmail = mergedData.email;
 
   } catch (err) {
     console.error(`   ⚠️  爬取失敗: ${err.message}`);

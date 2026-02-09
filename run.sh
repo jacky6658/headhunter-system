@@ -1,34 +1,21 @@
 #!/bin/bash
-# 獵頭爬蟲執行腳本
+# 獵頭系統啟動腳本 v2.0
+# 用法: ./run.sh "關鍵字" "地點" [最低薪資] [最大筆數]
+# 範例: ./run.sh "AI 工程師" "台北" 50000 20
 
-set -e
+cd "$(dirname "$0")"
 
-PROJECT_DIR="/Users/user/clawd/projects/headhunter"
-cd "$PROJECT_DIR"
+# 預設值
+KEYWORD="${1:-AI 工程師}"
+LOCATION="${2:-}"
+MIN_SALARY="${3:-0}"
+MAX_RESULTS="${4:-20}"
 
-# 顯示幫助
-if [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
-  echo "獵頭爬蟲使用說明"
-  echo ""
-  echo "用法："
-  echo "  ./run.sh <關鍵字> [地點] [最低薪資]"
-  echo ""
-  echo "範例："
-  echo "  ./run.sh \"AI 工程師\""
-  echo "  ./run.sh \"產品經理\" \"台北\""
-  echo "  ./run.sh \"數位行銷\" \"台北\" 60000"
-  echo ""
-  exit 0
-fi
-
-# 執行搜尋
-echo "🚀 開始執行 104 爬蟲..."
+echo "🦞 啟動獵頭系統..."
+echo "   關鍵字: $KEYWORD"
+echo "   地點: ${LOCATION:-不限}"
+echo "   最低薪資: ${MIN_SALARY:-不限}"
+echo "   最大筆數: $MAX_RESULTS"
 echo ""
 
-node scripts/main.js "$@"
-
-echo ""
-echo "✅ 完成！檔案已儲存在 data/ 目錄"
-echo ""
-echo "📂 查看結果："
-echo "   ls -lh data/*.csv"
+node scripts/main.js "$KEYWORD" "$LOCATION" "$MIN_SALARY" "$MAX_RESULTS"

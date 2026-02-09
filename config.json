@@ -12,9 +12,10 @@
     "maxConcurrent": 3
   },
   "googleSheets": {
-    "enabled": false,
-    "sheetId": "",
-    "sheetName": "Sheet1"
+    "enabled": true,
+    "sheetId": "1l8D8YkDORGQmYmBpnLJ6hsyHwBTF9eTidgo-ryLqY2E",
+    "sheetName": "工作表1",
+    "account": "aiagentg888@gmail.com"
   },
   "deduplication": {
     "enabled": true,
