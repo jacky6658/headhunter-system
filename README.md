@@ -1,13 +1,83 @@
 # 🦞 獵頭自動化爬蟲系統 v2.0
 
-自動爬取 104 + CakeResume 職缺，補充聯絡資訊，並同步到 Google Sheet。
+自動爬取 104 + CakeResume + 1111 + 518 職缺，補充聯絡資訊，並同步到 Google Sheet。
+
+## 📋 前置作業
+
+### 1. 系統需求
+- Node.js 18+ 
+- npm 或 yarn
+
+### 2. 安裝步驟
+
+```bash
+# 1. Clone 專案
+git clone https://github.com/jacky6658/headhunter-system.git
+cd headhunter-system
+
+# 2. 安裝依賴
+npm install
+
+# 3. 安裝 Playwright 瀏覽器
+npx playwright install chromium
+```
+
+### 3. 環境設定
+
+```bash
+# 設定 Brave Search API Key（聯絡資訊補充用）
+export BRAVE_API_KEY="your-brave-api-key"
+
+# 或加入 ~/.bashrc 或 ~/.zshrc
+echo 'export BRAVE_API_KEY="your-key"' >> ~/.zshrc
+```
+
+**取得 Brave API Key**：https://brave.com/search/api/
+
+### 4. Google Sheets 設定（可選）
+
+如果要自動匯出到 Google Sheet：
+
+```bash
+# 安裝 gog CLI
+npm install -g gog
+
+# 授權 Google 帳號
+gog auth login --services sheets,drive
+```
+
+### 5. 設定檔
+
+編輯 `config.json`：
+
+```json
+{
+  "platforms": {
+    "104": true,        // 啟用 104
+    "cakeresume": true, // 啟用 CakeResume
+    "1111": false,      // 啟用 1111（可選）
+    "518": false        // 啟用 518（可選）
+  },
+  "googleSheets": {
+    "enabled": true,
+    "sheetId": "你的-Google-Sheet-ID",
+    "account": "your-email@gmail.com"
+  }
+}
+```
+
+---
 
 ## ✨ 功能
 
 - ✅ **104 人力銀行**爬蟲（職缺 + 聯絡人）
 - ✅ **CakeResume / Cake.me** 爬蟲
-- ✅ **官網聯絡資訊補充**（電話、信箱）
-- ✅ **Google Sheet 自動匯出**（分頁：104 / cakeresume）
+- ✅ **1111 人力銀行**爬蟲（可選）
+- ✅ **518 人力銀行**爬蟲（可選）
+- ✅ **職缺去重**（7 天內不重複爬取）
+- ✅ **官網聯絡資訊補充**（電話、信箱，嘗試多個網站）
+- ✅ **Google Sheet 自動匯出**（分平台分頁）
+- ✅ **批次郵件發送**（個性化模板）
 - ✅ CSV 備份匯出
 
 ## 🚀 使用方式
