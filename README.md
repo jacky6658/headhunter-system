@@ -58,6 +58,12 @@ gog auth login --services sheets,drive
     "1111": false,      // 啟用 1111（可選）
     "518": false        // 啟用 518（可選）
   },
+  "scraper": {
+    "headless": true,
+    "slowMo": 1000,        // 每個操作間隔 1 秒
+    "maxResults": 20,
+    "requestDelay": 2000   // 每筆請求間隔 2 秒
+  },
   "googleSheets": {
     "enabled": true,
     "sheetId": "你的-Google-Sheet-ID",
@@ -65,6 +71,23 @@ gog auth login --services sheets,drive
   }
 }
 ```
+
+### ⚠️ 爬蟲注意事項（避免被封鎖）
+
+本系統已內建以下防護機制：
+
+| 機制 | 說明 |
+|------|------|
+| **隨機延遲** | 每次請求間隔 1-3 秒（模擬真人瀏覽） |
+| **請求頻率限制** | 每筆職缺詳情間隔 2 秒以上 |
+| **User-Agent 模擬** | 使用真實瀏覽器 User-Agent |
+| **Headless 瀏覽器** | 使用 Playwright 模擬完整瀏覽器行為 |
+
+**建議事項**：
+- ❌ 不要短時間內大量爬取（建議每次 < 50 筆）
+- ❌ 不要同時開多個爬蟲程序
+- ✅ 使用職缺去重功能，避免重複爬取
+- ✅ 錯開時間執行（如早上、下午各一次）
 
 ---
 
