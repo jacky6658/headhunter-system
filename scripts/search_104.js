@@ -65,7 +65,7 @@ async function search104(params = {}) {
       try {
         const card = jobCards[i];
         
-        // 解析職缺資訊
+        // 解析職缺基本資訊
         const jobData = await card.evaluate((el) => {
           // 公司名稱
           const companyEl = el.querySelector('.info-company__text');
@@ -111,12 +111,57 @@ async function search104(params = {}) {
           }
         }
         
-        results.push(jobData);
-        console.log(`   ✅ [${i + 1}] ${jobData.company} - ${jobData.title}`);
+        // 進入職缺詳細頁面抓取工作內容 + 聯絡資訊
+        try {
+          console.log(`   🔍 [${i + 1}] 進入詳細頁面: ${jobData.title}`);
+          
+          const detailPage = await context.newPage();
+          await detailPage.goto(jobData.link, { waitUntil: 'networkidle' });
+          await detailPage.waitForTimeout(2000);
+          
+          // 抓取詳細資訊（只抓工作內容 + 聯絡人）
+          const detailData = await detailPage.evaluate(() => {
+            // 工作內容
+            const descEl = document.querySelector('.job-description__content');
+            const description = descEl ? descEl.textContent.trim().replace(/\s+/g, ' ').substring(0, 300) : '';
+            
+            // 聯絡人（從頁面所有元素中找包含「聯絡人」的）
+            let contactPerson = '';
+            const allElements = Array.from(document.querySelectorAll('*'));
+            const contactSection = allElements.find(el => 
+              el.textContent.includes('聯絡人') && el.children.length < 5
+            );
+            if (contactSection) {
+              // 嘗試找名字（通常在「聯絡人」後面）
+              const text = contactSection.textContent;
+              const match = text.match(/聯絡人[:：\s]*([^\s\n應徵回]+)/);
+              if (match) contactPerson = match[1];
+            }
+            
+            // 電話/信箱由階段 2 官網補充
+            return { description, contactPerson, contactPhone: '', contactEmail: '' };
+          });
+          
+          // 合併資料
+          Object.assign(jobData, detailData);
+          
+          await detailPage.close();
+          console.log(`   ✅ [${i + 1}] ${jobData.company} - ${jobData.title}`);
+          
+        } catch (detailErr) {
+          console.error(`   ⚠️  無法抓取詳細資訊: ${detailErr.message}`);
+          // 設定預設值
+          jobData.description = '';
+          jobData.contactPerson = '';
+          jobData.contactPhone = '';
+          jobData.contactEmail = '';
+        }
         
-        // 每抓 5 筆休息一下
-        if ((i + 1) % 5 === 0) {
-          await page.waitForTimeout(2000);
+        results.push(jobData);
+        
+        // 每抓 3 筆休息一下（因為現在要進詳細頁，頻率降低）
+        if ((i + 1) % 3 === 0) {
+          await page.waitForTimeout(3000);
         }
         
       } catch (err) {
@@ -141,20 +186,28 @@ function exportCSV(data, filename) {
   const csvDir = path.join(__dirname, '../data');
   const csvPath = path.join(csvDir, filename);
   
-  // CSV 標頭
-  const headers = ['公司名稱', '職缺標題', '薪資範圍', '地點', '經驗要求', '連結', '更新日期'];
+  // CSV 標頭（新增：工作內容、聯絡人、聯絡電話、聯絡信箱）
+  const headers = [
+    '公司名稱', '職缺標題', '薪資範圍', '地點', '經驗要求', 
+    '工作內容', '聯絡人', '聯絡電話', '聯絡信箱', 
+    '連結', '更新日期'
+  ];
   const rows = [headers.join(',')];
   
   // 資料行
   data.forEach(job => {
     const row = [
-      `"${job.company}"`,
-      `"${job.title}"`,
-      `"${job.salary}"`,
-      `"${job.location}"`,
-      `"${job.experience}"`,
-      `"${job.link}"`,
-      `"${job.updateDate}"`
+      `"${job.company || ''}"`,
+      `"${job.title || ''}"`,
+      `"${job.salary || ''}"`,
+      `"${job.location || ''}"`,
+      `"${job.experience || ''}"`,
+      `"${(job.description || '').replace(/"/g, '""')}"`, // 處理內容中的引號
+      `"${job.contactPerson || ''}"`,
+      `"${job.contactPhone || ''}"`,
+      `"${job.contactEmail || ''}"`,
+      `"${job.link || ''}"`,
+      `"${job.updateDate || ''}"`
     ];
     rows.push(row.join(','));
   });
